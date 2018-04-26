@@ -1,6 +1,25 @@
+// RFID Variables
 const int tagLength = 13;
 char offenderID[tagLength] = {"18008386D6CB"};
-char scanTag[tagLength];
+char scannedTag[tagLength];
+
+// SMS Variables
+int warningCount = 0;
+
+// Customizable Warning messages for first to third occurance
+char firstMessage[] = {"This is the first warning."};
+char secondMessage[] = {"This is the second warning"};
+char thirdMessage[] = {"This is the third warning"};
+
+// Phone number must include the country code. Use '+1' for US and PR.
+char phoneNumber[] = {"+17871234567"};
+
+// Enum for warning ocurrances
+enum WarningType {
+  FIRST = 1,
+  SECOND,
+  THIRD
+};
 
 void setup() {
   powerGSMModule();
@@ -23,12 +42,8 @@ void loop() {
       //Take each byte out of the serial buffer, one at a time
       readByte = Serial1.read();
       
-      /* This will skip the first byte (2, STX, start of text) and the last three,
-       ASCII 13, CR/carriage return, ASCII 10, LF/linefeed, and ASCII 3, ETX/end of
-       text, leaving only the unique part of the tag string. It puts the byte into
-       the first space in the array, then steps ahead one spot */
       if (readByte != 2 && readByte != 13 && readByte != 10 && readByte != 3) {
-        scanTag[i] = readByte;
+        scannedTag[i] = readByte;
         i++;
       }
       
@@ -38,27 +53,45 @@ void loop() {
       }
     }
     
-    if (strlen(scanTag)== 0) {
+    if (strlen(scannedTag)== 0) {
       return;
-    }
-    
-    else if (isOffenderTag(scanTag, offenderID) == true) {
-      sendSMS();
-    } else {
-      //Serial.println("false");
+      
+    }  else if (isOffenderTag(scannedTag)) {
+      
+      warningCount++;
+      
+      switch (warningCount) {
+        case 1:
+          sendSMS(WarningType::FIRST);
+          break;
+          
+        case 2:
+          sendSMS(WarningType::SECOND);
+          break;
+          
+        case 3:
+          sendSMS(WarningType::THIRD);
+          break;
+          
+        default:
+          sendSMS(WarningType::THIRD);
+          break;
+      }
     }
   }
 }
 
-boolean isOffenderTag(char nTag[], char oTag[]) {
+/// Checks is the scanned tag matches the offender tag stored in offenderID
+boolean isOffenderTag(char scannedTag[]) {
   for (int i = 0; i < tagLength; i++) {
-    if (nTag[i] != oTag[i]) {
+    if (scannedTag[i] != offenderID[i]) {
       return false;
     }
   }
   return true;
 }
 
+/// Powers on the GSM module
 void powerGSMModule() {
   pinMode(13, OUTPUT);
   pinMode(9, OUTPUT);
@@ -68,14 +101,30 @@ void powerGSMModule() {
   delay(10000);
 }
 
-void sendSMS() {
+void sendSMS(WarningType warning) {
   Serial.println("AT+CMGF=1\r");
-  delay(2000);
-  Serial.println("AT+CMGS=\"+17876885771\"\r");
-  delay(10000);
-  Serial.println("This is the second message!");
-  delay(100);
-  Serial.println((char)26);                       // End AT command with a ^Z, ASCII code 26
+  delay(500);
+  
+  Serial.print("AT+CMGS=\"");
+  Serial.print(phoneNumber);
+  Serial.print("\"\r\n");
+  delay(3000);
+  
+  switch (warning) {
+    case FIRST:
+      Serial.println(firstMessage);
+      break;
+      
+    case SECOND:
+      Serial.println(secondMessage);
+      break;
+      
+    case THIRD:
+      Serial.println(thirdMessage);
+      break;
+  }
+  
+  Serial.println((char)26);
   delay(100);
   Serial.println();
 }
